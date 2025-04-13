@@ -3,7 +3,7 @@ import requests
 import json
 from datetime import datetime
 
-BOT_TOKEN = "7884645795:AAHV9gm-XLivebS32XWFNp2fsvxGjsQ4HNc"  # Вставиш на кроці 5
+BOT_TOKEN = "7884645795:AAHSdUVQXkaX3iuCb3sTMl2iNGnQtLTWYwI"  # Вставиш на кроці 5
 CHANNEL_ID = "@HyperballoidAIArt"
 
 def start(update, context):
