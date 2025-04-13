@@ -1,16 +1,17 @@
 from telegram.ext import Updater, CommandHandler, PollHandler
 import requests
 import json
+import os
 from news import get_news
 from trends import get_trends
 from blog import save_draft
 
-BOT_TOKEN = "7884645795:AAHSdUVQXkaX3iuCb3sTMl2iNGnQtLTWYwI"  # Заміни на токен із @BotFather
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Токен із Render Environment
 CHANNEL_ID = "@HyperballoidAIArt"
-X_TOKEN = "AAAAAAAAAAAAAAAAAAAAAH9Y0gEAAAAAv%2F7M9QMsHqnWW%2Bvn4oHfx9oni%2Fw%3Dm3NOm3gdxx6mzcB5bMrPFMUpRazFMRcBdBVT2KR5JWmluPU1Wd"  # Заміни на Bearer Token із developer.x.com
-NEWSAPI_KEY = "9239566228964ff28e1a7f3976a5b272"  # Заміни на ключ із newsapi.org
-WP_URL = "YOUR_WORDPRESS_URL"  # Заміни, якщо є WordPress (наприклад, myblog.wordpress.com)
-WP_AUTH = ("username", "password")  # Заміни для WordPress
+X_TOKEN = os.getenv("X_TOKEN", "YOUR_X_TOKEN")
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")
+WP_URL = os.getenv("WP_URL", "YOUR_WORDPRESS_URL")
+WP_AUTH = (os.getenv("WP_AUTH_USERNAME", "username"), os.getenv("WP_AUTH_PASSWORD", "password"))
 
 def start(update, context):
     lang = update.message.from_user.language_code
@@ -21,7 +22,7 @@ def start(update, context):
             "/trends - Тренди\n/poll - Опитування\n/giveaway - Розіграш\n"
             "/challenge - Челендж\n/prompt - Промпт для Leonardo.ai\n"
             "/draft - Чернетка статті\n/publish - Поширення\n/collab - Колаборації\n"
-            "/contest - Конкурси"
+            "/contest - Конкурси\n/invite - Запросити друзів"
         )
     else:
         update.message.reply_text(
@@ -30,7 +31,7 @@ def start(update, context):
             "/trends - Trends\n/poll - Poll\n/giveaway - Raffle\n"
             "/challenge - Challenge\n/prompt - Leonardo.ai prompt\n"
             "/draft - Article draft\n/publish - Share\n/collab - Collabs\n"
-            "/contest - Contests"
+            "/contest - Contests\n/invite - Invite friends"
         )
 
 def guide(update, context):
@@ -47,7 +48,7 @@ def guide(update, context):
         "vr": "🕶️ Гайд з VR:\n1. Спробуй Spatial.io\n2. Завантаж NFT\n3. Поділись з /vr"
     }
     guides = guides_uk if lang.startswith("uk") else guides_en
-    update.message.reply_text(guides.get(topic, "Use /guide ai, /guide nft, or /guide vr"))
+    update.message.reply_text(guides.get(topic, "Використовуй /guide ai, /guide nft або /guide vr" if lang.startswith("uk") else "Use /guide ai, /guide nft, or /guide vr"))
 
 def nft(update, context):
     lang = update.message.from_user.language_code
@@ -61,22 +62,27 @@ def news(update, context):
     lang = update.message.from_user.language_code
     try:
         articles = get_news(NEWSAPI_KEY)
+        if not articles:
+            raise Exception("No news")
         response = "\n".join(f"📰 {a['title']}: {a['url']}" for a in articles)
         if lang.startswith("uk"):
             update.message.reply_text(f"Останні новини AI-арту:\n{response}")
         else:
             update.message.reply_text(f"Latest AI art news:\n{response}")
-    except Exception as e:
+    except:
         update.message.reply_text("Помилка новин. Спробуй пізніше." if lang.startswith("uk") else "News error. Try later.")
 
 def trends(update, context):
     lang = update.message.from_user.language_code
-    trends = get_trends()
-    response = ", ".join(trends)
-    if lang.startswith("uk"):
-        update.message.reply_text(f"🔥 Тренди: {response}")
-    else:
-        update.message.reply_text(f"🔥 Trends: {response}")
+    try:
+        trends = get_trends()
+        response = ", ".join(trends)
+        if lang.startswith("uk"):
+            update.message.reply_text(f"🔥 Тренди: {response}")
+        else:
+            update.message.reply_text(f"🔥 Trends: {response}")
+    except:
+        update.message.reply_text("Помилка трендів." if lang.startswith("uk") else "Trends error.")
 
 def poll(update, context):
     lang = update.message.from_user.language_code
@@ -115,7 +121,7 @@ def draft(update, context):
             update.message.reply_text(f"Чернетку збережено: {topic}. Перевір blog/{topic.replace(' ', '_')}.md")
         else:
             update.message.reply_text(f"Draft saved: {topic}. Check blog/{topic.replace(' ', '_')}.md")
-    except Exception as e:
+    except:
         update.message.reply_text("Помилка чернетки. Спробуй ще." if lang.startswith("uk") else "Draft error. Try again.")
 
 def publish(update, context):
@@ -130,20 +136,20 @@ def publish(update, context):
                 f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
                 data={"chat_id": CHANNEL_ID, "text": message}
             )
-        if platform in ("x", "all"):
+        if platform in ("x", "all") and X_TOKEN != "YOUR_X_TOKEN":
             requests.post(
                 "https://api.twitter.com/2/tweets",
                 headers={"Authorization": f"Bearer {X_TOKEN}"},
                 json={"text": message}
             )
-        if platform in ("wp", "all"):
+        if platform in ("wp", "all") and WP_URL != "YOUR_WORDPRESS_URL":
             requests.post(
                 f"{WP_URL}/wp-json/wp/v2/posts",
                 auth=WP_AUTH,
                 json={"title": topic, "content": message, "status": "publish"}
             )
         update.message.reply_text("Опубліковано!" if lang.startswith("uk") else "Published!")
-    except Exception as e:
+    except:
         update.message.reply_text("Помилка публікації." if lang.startswith("uk") else "Publish error.")
 
 def collab(update, context):
@@ -154,6 +160,11 @@ def collab(update, context):
 def contest(update, context):
     lang = update.message.from_user.language_code
     text = "🏅 Конкурс: NFT-челендж на ArtStation, дедлайн 1 травня. Подай через /nft!" if lang.startswith("uk") else "🏅 Contest: NFT challenge on ArtStation, deadline May 1. Submit via /nft!"
+    update.message.reply_text(text)
+
+def invite(update, context):
+    lang = update.message.from_user.language_code
+    text = "Запроси друзів до @HyperballoidAIArt для AI-арту та NFT! Лінк: https://t.me/HyperballoidAIArt" if lang.startswith("uk") else "Invite friends to @HyperballoidAIArt for AI art & NFTs! Link: https://t.me/HyperballoidAIArt"
     update.message.reply_text(text)
 
 def main():
@@ -172,6 +183,7 @@ def main():
     dp.add_handler(CommandHandler("publish", publish))
     dp.add_handler(CommandHandler("collab", collab))
     dp.add_handler(CommandHandler("contest", contest))
+    dp.add_handler(CommandHandler("invite", invite))
     updater.start_polling(poll_interval=1.0, timeout=10, clean=True)
     updater.idle()
 
