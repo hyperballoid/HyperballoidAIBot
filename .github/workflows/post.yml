@@ -1,0 +1,14 @@
+name: Daily Channel Post
+on:
+  schedule:
+    - cron: '0 10 * * *'  # 10:00 UTC = 12:00 Київ
+  workflow_dispatch:
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -X POST \
+          -d chat_id=@HyperballoidAIArt \
+          -d text="Щоденне оновлення! Спробуй /guide для AI-арту. #NFTart" \
+          https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage
