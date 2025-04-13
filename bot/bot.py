@@ -7,8 +7,8 @@ from blog import save_draft
 
 BOT_TOKEN = "7884645795:AAHSdUVQXkaX3iuCb3sTMl2iNGnQtLTWYwI"  # Заміни на токен із @BotFather
 CHANNEL_ID = "@HyperballoidAIArt"
-X_TOKEN = "YOUR_X_TOKEN"  # Заміни на Bearer Token із developer.x.com
-NEWSAPI_KEY = "YOUR_NEWSAPI_KEY"  # Заміни на ключ із newsapi.org
+X_TOKEN = "AAAAAAAAAAAAAAAAAAAAAH9Y0gEAAAAAv%2F7M9QMsHqnWW%2Bvn4oHfx9oni%2Fw%3Dm3NOm3gdxx6mzcB5bMrPFMUpRazFMRcBdBVT2KR5JWmluPU1Wd"  # Заміни на Bearer Token із developer.x.com
+NEWSAPI_KEY = "9239566228964ff28e1a7f3976a5b272"  # Заміни на ключ із newsapi.org
 WP_URL = "YOUR_WORDPRESS_URL"  # Заміни, якщо є WordPress (наприклад, myblog.wordpress.com)
 WP_AUTH = ("username", "password")  # Заміни для WordPress
 
