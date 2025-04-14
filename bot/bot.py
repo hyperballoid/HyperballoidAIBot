@@ -3,8 +3,8 @@ import os
 import requests
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, CallbackQueryHandler, filters
 from news import get_news
 from trends import get_trends
 from blog import save_draft
@@ -15,6 +15,7 @@ sid = SentimentIntensityAnalyzer()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")  # Токен із Render
 HF_TOKEN = os.getenv("HF_TOKEN")  # Hugging Face токен
+GOOGLE_TRANSLATE_KEY = os.getenv("GOOGLE_TRANSLATE_KEY")  # Google Translate ключ
 CHANNEL_ID = "@HyperballoidAIArt"
 X_TOKEN = os.getenv("X_TOKEN", "YOUR_X_TOKEN")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")
@@ -38,7 +39,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/challenge - Челендж\n/prompt - Промпт для Leonardo.ai\n"
             "/draft - Чернетка статті\n/publish - Поширення\n/collab - Колаборації\n"
             "/contest - Конкурси\n/grants - Пошук грантів\n/chat - Поговори зі мною\n"
-            "/analyze - Аналіз настрою тексту\n/invite - Запросити друзів"
+            "/analyze - Аналіз настрою тексту\n/postart - Поширення арту\n/invite - Запросити друзів"
         )
     else:
         await update.message.reply_text(
@@ -48,7 +49,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/challenge - Challenge\n/prompt - Leonardo.ai prompt\n"
             "/draft - Article draft\n/publish - Share\n/collab - Collabs\n"
             "/contest - Contests\n/grants - Search grants\n/chat - Talk to me\n"
-            "/analyze - Analyze text sentiment\n/invite - Invite friends"
+            "/analyze - Analyze text sentiment\n/postart - Share art\n/invite - Invite friends"
         )
 
 async def guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -113,7 +114,7 @@ async def poll(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_anonymous=False
     )
 
-async def giveaway(update: Update, context: Update):
+async def giveaway(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.effective_user.language_code
     text = "🎁 Виграй безкоштовний NFT! Підпишись на @HyperballoidAIArt і зроби репост у X!" if lang.startswith("uk") else "🎁 Win a free NFT! Follow @HyperballoidAIArt and retweet on X!"
     await update.message.reply_text(text)
@@ -201,8 +202,19 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
+        # Переклад на англійську, якщо українська
+        query_to_hf = query
+        if lang.startswith("uk") and GOOGLE_TRANSLATE_KEY:
+            response = requests.get(
+                f"https://translation.googleapis.com/language/translate/v2?key={GOOGLE_TRANSLATE_KEY}",
+                params={"q": query, "source": "uk", "target": "en"}
+            )
+            response.raise_for_status()
+            query_to_hf = response.json()["data"]["translations"][0]["translatedText"]
+        
+        # Запит до Hugging Face
         headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-        payload = {"inputs": query, "parameters": {"max_new_tokens": 100}}
+        payload = {"inputs": query_to_hf, "parameters": {"max_new_tokens": 100}}
         response = requests.post(
             "https://api-inference.huggingface.co/models/facebook/blenderbot-400M-distill",
             headers=headers,
@@ -210,6 +222,16 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         response.raise_for_status()
         answer = response.json()[0]["generated_text"]
+        
+        # Переклад відповіді на українську
+        if lang.startswith("uk") and GOOGLE_TRANSLATE_KEY:
+            response = requests.get(
+                f"https://translation.googleapis.com/language/translate/v2?key={GOOGLE_TRANSLATE_KEY}",
+                params={"q": answer, "source": "en", "target": "uk"}
+            )
+            response.raise_for_status()
+            answer = response.json()["data"]["translations"][0]["translatedText"]
+        
         await update.message.reply_text(answer)
     except:
         await update.message.reply_text("Помилка чату. Спробуй ще раз!" if lang.startswith("uk") else "Chat error. Try again!")
@@ -230,6 +252,92 @@ async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"Text sentiment: {sentiment} (positive: {scores['pos']}, negative: {scores['neg']}, neutral: {scores['neu']})")
     except:
         await update.message.reply_text("Помилка аналізу. Спробуй ще!" if lang.startswith("uk") else "Analysis error. Try again!")
+
+async def postart(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = update.effective_user.language_code
+    if not update.message.photo:
+        await update.message.reply_text(
+            "Надішли зображення твоєї роботи!" if lang.startswith("uk") else "Send an image of your artwork!"
+        )
+        return
+    
+    # Зберігаємо фото
+    photo = update.message.photo[-1]
+    context.user_data["art_photo"] = photo.file_id
+    
+    # Генеруємо опис через Hugging Face
+    try:
+        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+        payload = {"inputs": "Describe a digital artwork in a cyberpunk style", "parameters": {"max_new_tokens": 50}}
+        response = requests.post(
+            "https://api-inference.huggingface.co/models/facebook/blenderbot-400M-distill",
+            headers=headers,
+            json=payload
+        )
+        response.raise_for_status()
+        description = response.json()[0]["generated_text"]
+    except:
+        description = "A stunning digital artwork inspired by cyberpunk aesthetics."
+    
+    context.user_data["art_description"] = description
+    
+    # Запитуємо розмір
+    await update.message.reply_text(
+        f"Опис: {description}\nВкажи розмір (наприклад, 1080x1080):" if lang.startswith("uk")
+        else f"Description: {description}\nSpecify size (e.g., 1080x1080):"
+    )
+    context.user_data["postart_step"] = "size"
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = update.effective_user.language_code
+    if context.user_data.get("postart_step") == "size":
+        context.user_data["art_size"] = update.message.text
+        context.user_data["postart_step"] = "confirm"
+        
+        # Показуємо чернетку
+        photo = context.user_data["art_photo"]
+        description = context.user_data["art_description"]
+        size = context.user_data["art_size"]
+        
+        keyboard = [
+            [InlineKeyboardButton("Підтвердити", callback_data="confirm_post"),
+             InlineKeyboardButton("Скасувати", callback_data="cancel_post")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=photo,
+            caption=f"Чернетка:\nОпис: {description}\nРозмір: {size}" if lang.startswith("uk")
+            else f"Draft:\nDescription: {description}\nSize: {size}",
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text(
+            "Надішли команду, наприклад, /postart!" if lang.startswith("uk")
+            else "Send a command, e.g., /postart!"
+        )
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    lang = update.effective_user.language_code
+    
+    if query.data == "confirm_post":
+        photo = context.user_data["art_photo"]
+        description = context.user_data["art_description"]
+        size = context.user_data["art_size"]
+        
+        await query.message.reply_text(
+            f"Опубліковано!\nОпис: {description}\nРозмір: {size}" if lang.startswith("uk")
+            else f"Published!\nDescription: {description}\nSize: {size}"
+        )
+        context.user_data.clear()
+    elif query.data == "cancel_post":
+        await query.message.reply_text(
+            "Скасовано." if lang.startswith("uk") else "Cancelled."
+        )
+        context.user_data.clear()
 
 async def invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.effective_user.language_code
@@ -256,6 +364,9 @@ async def main():
         application.add_handler(CommandHandler("grants", grants))
         application.add_handler(CommandHandler("chat", chat))
         application.add_handler(CommandHandler("analyze", analyze))
+        application.add_handler(CommandHandler("postart", postart))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        application.add_handler(CallbackQueryHandler(button_callback))
         application.add_handler(CommandHandler("invite", invite))
 
         await application.initialize()
